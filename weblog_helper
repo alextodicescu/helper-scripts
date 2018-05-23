@@ -3,15 +3,18 @@
 """
 TODO:
 - how to package the project to ensure all modules are available (ie. netaddr)
-- read from file instead from variable - urllib
+- Check if local log is present, else download from S3. Read from file
+- re-think where is_cidr() is performed, should be done only once
+
 """
+
+from netaddr import IPAddress, IPNetwork
 
 # stdlib import
 import argparse
 import json
 import logging
 import requests
-from netaddr import IPAddress, IPNetwork
 logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
 					level=logging.INFO,
 					datefmt='%Y-%m-%d %H:%M:%S'
@@ -26,12 +29,15 @@ def get_access_log(target_url):
 	"""Return access log"""
 	return requests.get(target_url).content
 
+def print_if_interesting(log_line, arg_source_ip):
+	"""Print *log_line* if it is interesting """
+	log_source_ip = get_source_ip(log_line)
+	if is_in_range(log_source_ip, arg_source_ip):
+		print(log_line)
+
 def get_source_ip(log_line):
 	"""Return source ip field from *log_line* """
 	return log_line.split(' - - ')[0]
-
-def is_cidr(arg_source_ip):
-	return False
 
 def is_in_range(log_source_ip, arg_source_ip):
 	"""Return True if *log_line* contains the source ip we are looking for """
@@ -39,12 +45,12 @@ def is_in_range(log_source_ip, arg_source_ip):
 		return IPAddress(log_source_ip) in IPNetwork(arg_source_ip)
 	else:
 		return log_source_ip == arg_source_ip
-		
-def print_if_interesting(log_line, arg_source_ip):
-	"""Print *log_line* if it is interesting """
-	log_source_ip = get_source_ip(log_line)
-	if is_in_range(log_source_ip, arg_source_ip):
-		print(log_line)
+
+def is_cidr(arg_source_ip):
+	"""Return True if provided *arg_source_ip* represents a CIDR, not a host"""
+	if IPNetwork(arg_source_ip).prefixlen < 32:
+		return True
+	return False
 
 def main():
 	logging.info("Execution started.")
@@ -65,7 +71,6 @@ def main():
 			print_if_interesting(line, arg_source_ip)
 
 	logging.info("Execution finished.")
-
 
 
 if __name__ == "__main__":
