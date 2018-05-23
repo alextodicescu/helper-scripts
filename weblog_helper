@@ -1,0 +1,72 @@
+#!/usr/bin/env python
+
+"""
+TODO:
+- how to package the project to ensure all modules are available (ie. netaddr)
+- read from file instead from variable - urllib
+"""
+
+# stdlib import
+import argparse
+import json
+import logging
+import requests
+from netaddr import IPAddress, IPNetwork
+logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
+					level=logging.INFO,
+					datefmt='%Y-%m-%d %H:%M:%S'
+					)
+
+
+def validate_ip(arg_source_ip):
+	"""Return True if *arg_source_ip* is a valid ip"""
+	return True
+
+def get_access_log(target_url):
+	"""Return access log"""
+	return requests.get(target_url).content
+
+def get_source_ip(log_line):
+	"""Return source ip field from *log_line* """
+	return log_line.split(' - - ')[0]
+
+def is_cidr(arg_source_ip):
+	return False
+
+def is_in_range(log_source_ip, arg_source_ip):
+	"""Return True if *log_line* contains the source ip we are looking for """
+	if is_cidr(arg_source_ip):
+		return IPAddress(log_source_ip) in IPNetwork(arg_source_ip)
+	else:
+		return log_source_ip == arg_source_ip
+		
+def print_if_interesting(log_line, arg_source_ip):
+	"""Print *log_line* if it is interesting """
+	log_source_ip = get_source_ip(log_line)
+	if is_in_range(log_source_ip, arg_source_ip):
+		print(log_line)
+
+def main():
+	logging.info("Execution started.")
+
+	# Read command-line parameters
+	parser = argparse.ArgumentParser()
+	parser.add_argument("--ip", action="store", required=True, dest="ip", help="Source IP or CIDR to search for.")
+
+	args = parser.parse_args()
+	arg_source_ip = args.ip
+
+	if validate_ip(arg_source_ip):
+		# Not ideal if log file is big, would be better to use a file handler
+		data = get_access_log("https://s3.amazonaws.com/syseng-challenge/public_access.log.txt")
+		logging.info("Log file downloaded.")
+#		print(type(data))
+		for line in data.splitlines():
+			print_if_interesting(line, arg_source_ip)
+
+	logging.info("Execution finished.")
+
+
+
+if __name__ == "__main__":
+	main()
