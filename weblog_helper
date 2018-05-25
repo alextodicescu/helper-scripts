@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 
 """
+Notes:
+weblog-helper script requires netaddr python library. Please install it beforehand:
+pip install netaddr
+
 TODO:
 - check if local log is present, else download from S3. Read from file
 """
