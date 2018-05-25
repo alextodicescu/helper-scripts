@@ -2,27 +2,31 @@
 
 """
 TODO:
-- how to package the project to ensure all modules are available (ie. netaddr)
-- Check if local log is present, else download from S3. Read from file
-- re-think where is_cidr() is performed, should be done only once
-
+- check if local log is present, else download from S3. Read from file
 """
 
-from netaddr import IPAddress, IPNetwork
+import sys
+if sys.version_info > (3, 0):
+	sys.stderr.write('This script requires Python 2.7')
+	sys.exit(1)
 
-# stdlib import
+import netaddr
 import argparse
 import json
 import logging
 import requests
 logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
-					level=logging.INFO,
+					level=logging.ERROR,
 					datefmt='%Y-%m-%d %H:%M:%S'
 					)
 
 
 def validate_ip(arg_source_ip):
 	"""Return True if *arg_source_ip* is a valid ip"""
+	try:
+		ip = netaddr.IPNetwork(arg_source_ip)
+	except (netaddr.core.AddrFormatError, ValueError):
+		raise ValueError("Argument (%s) is not in correct presentation format" % arg_source_ip)
 	return True
 
 def get_access_log(target_url):
@@ -41,20 +45,20 @@ def get_source_ip(log_line):
 
 def is_in_range(log_source_ip, arg_source_ip):
 	"""Return True if *log_line* contains the source ip we are looking for """
-	if is_cidr(arg_source_ip):
-		return IPAddress(log_source_ip) in IPNetwork(arg_source_ip)
+	if is_cidr:
+		return netaddr.IPAddress(log_source_ip) in netaddr.IPNetwork(arg_source_ip)
 	else:
 		return log_source_ip == arg_source_ip
 
 def is_cidr(arg_source_ip):
 	"""Return True if provided *arg_source_ip* represents a CIDR, not a host"""
-	if IPNetwork(arg_source_ip).prefixlen < 32:
+	if netaddr.IPNetwork(arg_source_ip).prefixlen < 32:
 		return True
 	return False
 
 def main():
 	logging.info("Execution started.")
-
+	
 	# Read command-line parameters
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--ip", action="store", required=True, dest="ip", help="Source IP or CIDR to search for.")
@@ -62,11 +66,22 @@ def main():
 	args = parser.parse_args()
 	arg_source_ip = args.ip
 
+	# Check if IP has valid format (host or cidr)
 	if validate_ip(arg_source_ip):
-		# Not ideal if log file is big, would be better to use a file handler
+
+		# Check if ip argument is host or cidr
+		# Set varible *is_cidr* as global to only check once if *arg_source_ip* is host or cidr
+		global is_cidr
+		if is_cidr(arg_source_ip):
+			is_cidr = True
+		else:
+			is_cidr = False
+
+		# Read http access log
+		# Not ideal if log file is big, would be better to use a file handler. Also downloads file every time script is run
 		data = get_access_log("https://s3.amazonaws.com/syseng-challenge/public_access.log.txt")
 		logging.info("Log file downloaded.")
-#		print(type(data))
+
 		for line in data.splitlines():
 			print_if_interesting(line, arg_source_ip)
 
